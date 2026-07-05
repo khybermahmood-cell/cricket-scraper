@@ -1,0 +1,51 @@
+from flask import Flask, request, jsonify
+import cloudscraper
+from bs4 import BeautifulSoup
+import re
+
+app = Flask(__name__)
+scraper = cloudscraper.create_scraper()
+
+@app.route('/')
+def home():
+    return "Cricket Scraper is running! Use /score?matchId=12345"
+
+@app.route('/score')
+def get_score():
+    match_id = request.args.get('matchId')
+    if not match_id:
+        return jsonify({"error": "Missing matchId parameter"}), 400
+
+    url = f"https://www.cricclubs.com/scorecard.do?matchId={match_id}"
+    
+    try:
+        html = scraper.get(url).text
+        soup = BeautifulSoup(html, 'html.parser')
+        text = soup.get_text()
+        
+        score_pattern = re.search(r'(\d+)\s*[/-]\s*(\d+)', text)
+        runs = "N/A"
+        wickets = "N/A"
+        overs = "N/A"
+        
+        if score_pattern:
+            runs = score_pattern.group(1)
+            wickets = score_pattern.group(2)
+        
+        overs_pattern = re.search(r'Overs?\s*[:.]?\s*([\d.]+)', text, re.IGNORECASE)
+        if overs_pattern:
+            overs = overs_pattern.group(1)
+        
+        return jsonify({
+            "runs": runs,
+            "wickets": wickets,
+            "overs": overs,
+            "matchId": match_id,
+            "status": "success"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
